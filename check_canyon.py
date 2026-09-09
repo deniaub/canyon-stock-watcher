@@ -18,7 +18,9 @@ PRODUCT_URL = (
 )
 PRODUCT_LABEL = "Canyon Endurace CF SLX 8 Di2 (R130_P02, taille S)"
 
-NTFY_TOPIC = os.environ.get("NTFY_TOPIC", "canyon-endurace-23t2ntqyf7")
+# Un secret GitHub non défini expose une variable d'env vide (pas absente) :
+# `or` garantit qu'on retombe alors sur le topic par défaut.
+NTFY_TOPIC = os.environ.get("NTFY_TOPIC") or "canyon-endurace-23t2ntqyf7"
 NTFY_URL = f"https://ntfy.sh/{NTFY_TOPIC}"
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state.json")
@@ -87,7 +89,7 @@ def notify(status, changed):
         priority = "default"
         tags = "warning"
 
-    requests.post(
+    r = requests.post(
         NTFY_URL,
         data=message.encode("utf-8"),
         headers={
@@ -98,6 +100,8 @@ def notify(status, changed):
         },
         timeout=15,
     )
+    r.raise_for_status()
+    print(f"  ntfy <- {title!r} (topic {NTFY_TOPIC})")
 
 
 def report(status):
