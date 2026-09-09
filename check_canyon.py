@@ -1,6 +1,7 @@
 """
 Canyon Stock Watcher
 Surveille la disponibilité d'une variante précise d'un vélo Canyon et notifie via ntfy.sh.
+Une notification est envoyée à chaque exécution (résultat positif ou négatif).
 """
 
 import json
@@ -38,8 +39,6 @@ OUT_OF_STOCK_MARKERS = [
 ]
 IN_STOCK_MARKER = "Ajouter au panier"
 
-REMIND_INTERVAL_MIN = 20  # relance de notif tant que le vélo reste en stock
-
 
 # ── État persistant ────────────────────────────────────────────────────────────
 def load_state():
@@ -67,12 +66,18 @@ def check_stock():
 
 
 # ── Notification ────────────────────────────────────────────────────────────────
-def notify(status):
+def notify(status, changed):
     if status == "in_stock":
-        title = "Canyon - Velo disponible !"
+        title = "Canyon - Velo DISPONIBLE !"
         message = f"{PRODUCT_LABEL} est disponible a l'achat.\n{PRODUCT_URL}"
         priority = "urgent"
         tags = "rotating_light,bike"
+    elif status == "out_of_stock":
+        title = "Canyon Watcher - toujours indisponible" if not changed \
+            else "Canyon Watcher - repasse en rupture"
+        message = f"{PRODUCT_LABEL} : indisponible.\n{PRODUCT_URL}"
+        priority = "default" if changed else "low"
+        tags = "no_entry" if not changed else "arrow_down"
     else:  # unknown
         title = "Canyon Watcher - statut incertain"
         message = (
@@ -95,29 +100,16 @@ def notify(status):
     )
 
 
-def maybe_notify(status):
+def report(status):
+    """Notifie a chaque execution, en signalant les changements d'etat."""
     state = load_state()
-    last_status = state.get("last_status")
-    last_notified_at = state.get("last_notified_at")
+    changed = status != state.get("last_status")
     now = datetime.now(timezone.utc)
 
-    should_notify = False
-    if status == "in_stock":
-        if last_status != "in_stock":
-            should_notify = True
-        elif last_notified_at:
-            elapsed_min = (now - datetime.fromisoformat(last_notified_at)).total_seconds() / 60
-            should_notify = elapsed_min >= REMIND_INTERVAL_MIN
-        else:
-            should_notify = True
-    elif status == "unknown" and last_status != "unknown":
-        should_notify = True
-
-    if should_notify:
-        notify(status)
-        state["last_notified_at"] = now.isoformat()
+    notify(status, changed)
 
     state["last_status"] = status
+    state["last_notified_at"] = now.isoformat()
     state["last_checked_at"] = now.isoformat()
     save_state(state)
 
@@ -128,11 +120,11 @@ def main():
     try:
         if os.environ.get("TEST_NOTIFICATION") == "true":
             print("Mode test : envoi d'une notification factice, aucun état modifié.")
-            notify("in_stock")
+            notify("in_stock", changed=True)
             return
         status = check_stock()
         print(f"Statut : {status}")
-        maybe_notify(status)
+        report(status)
     except Exception as e:
         print(f"✗ Erreur : {e}")
         raise
