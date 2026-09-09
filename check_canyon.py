@@ -126,6 +126,10 @@ def maybe_notify(status):
 def main():
     print(f"\n=== Canyon Stock Watcher — {datetime.now().isoformat(timespec='seconds')} ===")
     try:
+        if os.environ.get("TEST_NOTIFICATION") == "true":
+            print("Mode test : envoi d'une notification factice, aucun état modifié.")
+            notify("in_stock")
+            return
         status = check_stock()
         print(f"Statut : {status}")
         maybe_notify(status)
